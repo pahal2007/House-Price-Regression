@@ -1,0 +1,245 @@
+---
+title: "R Notebook"
+output: html_notebook
+---
+
+First we install required libraries - 
+
+```{r, warning=FALSE}
+## Installing packages and setting working directory
+
+library(dplyr)
+library(ggplot2)
+library(lubridate)
+library(skimr)
+
+
+```
+
+Next we read data
+
+```{r, warning=FALSE}
+house <- read.csv('kc_house_data_rik.csv') # this is the renamed kc_house_data (1) uploaded by Rik
+summary(house)
+```
+
+We notice that the data needs a certain amount of cleaning (e.g. date variable) and we also derive a few metrics, namely 
+
+```{r, warning = FALSE}
+## Removing lat and long
+house_new <- house %>% select(-c(lat, long))
+
+# DERIVING NEW METRICS
+
+## Total sqft
+house_new <- house_new %>% mutate(total_sqft = sqft_living + sqft_lot + sqft_basement,
+                          total_sqft15 = sqft_living15 + sqft_lot15 + sqft_basement)
+
+## Change in sqft (after renovation)
+house_new <- house_new %>% mutate(change_in_sqft = total_sqft15 - total_sqft)
+
+## House newness
+house_new <- house_new %>% mutate(year_sold = year(ymd(substr(house_new$date, 1,8))))
+house_new <- house_new %>% mutate(newness = year_sold - pmax(yr_built, yr_renovated))
+
+## Bed to bath ratio
+house_new <- house_new %>% mutate(bed_bath_ratio = bedrooms/bathrooms)
+
+## Cleaning date value
+house_new$date <- gsub('T000000', '', house_new$date)
+house_new <- house_new %>% mutate(date_new = ymd(date))
+house_new <- house_new %>% mutate(year_sold = year(date_new))
+
+## Average floor size
+
+house_new <- house_new %>% mutate(area_floor_ratio = sqft_living/floors, area_floor_ratio_15 = sqft_living15/floors)
+house_new <- house_new %>% mutate(area_floor_change = area_floor_ratio_15 - area_floor_ratio)
+
+colnames(house_new)
+```
+
+## Descriptive stats
+
+```{r}
+## Relation between grade and living area
+#ggplot(house) + aes(x=as.factor(grade), y = sqft_living) + geom_boxplot()
+#ggplot(house) + aes(x=as.factor(grade), y = price) + geom_boxplot()
+
+# Relation between 
+#ggplot(house) + aes(x=as.factor(waterfront), y = price) + geom_boxplot()
+#house_new$bedrooms = as.factor(house_new$bedrooms)
+#house_new$bathrooms = as.factor(house_new$bathrooms)
+summary(house_new)
+```
+
+
+##descriptive analysis
+```{r}
+house_new %>% ggplot(aes(x=price)) + geom_histogram(bins = 50)
+```
+
+
+#bedroom 
+```{r}
+unique(house_new$bedrooms)
+#summary(lm(house_new$price~as.factor(house_new$bedrooms)))
+bedroom.aov = aov(house_new$price~as.factor(house_new$bedrooms),data = house_new)
+summary(bedroom.aov)
+```
+```{r}
+house_new %>% ggplot(aes(bedrooms,price,group = bedrooms))+geom_boxplot()+xlim(0,20)
+```
+
+Tukey
+```{r}
+aa = TukeyHSD(bedroom.aov,conf.level = .9)
+aa = aa$`as.factor(house_new$bedrooms)`
+aa[,4][aa[,4]<=0.05]
+```
+
+#bathroom
+```{r}
+unique(house_new$bathrooms)
+bathroom.aov = aov(house_new$price~as.factor(house_new$bathrooms),data = house_new)
+summary(bathroom.aov)
+```
+
+```{r}
+house_new %>% ggplot(aes(bathrooms,price,group = bathrooms))+geom_boxplot()+xlim(0,10)
+```
+
+
+```{r}
+house_new %>% ggplot(aes(bathrooms,price,group = bedrooms))+geom_boxplot()+xlim(0,7)
+```
+
+
+```{r}
+aa = TukeyHSD(bathroom.aov,conf.level = .9)
+aa = aa$`as.factor(house_new$bathrooms)`
+aa[,4][aa[,4]<=0.05]
+
+```
+
+
+#waterfront
+```{r}
+unique(house_new$waterfront)
+waterfront.aov = aov(house_new$price~as.factor(house_new$waterfront),data = house_new)
+summary(waterfront.aov)
+```
+
+```{r}
+house_new %>% ggplot(aes(waterfront,price,group = waterfront))+geom_boxplot()+xlim(-1,2)
+```
+
+#floor
+
+```{r}
+unique(house_new$floors)
+floor.aov = aov(house_new$price~as.factor(house_new$floors),data = house_new)
+summary(floor.aov)
+```
+
+```{r}
+house_new %>% ggplot(aes(floors,price,group = floors))+geom_boxplot()+xlim(0,5)
+```
+
+```{r}
+aa = TukeyHSD(floor.aov,conf.level = .9)
+aa = aa$`as.factor(house_new$floors)`
+aa[,4][aa[,4]<=0.05]
+```
+
+
+#condition
+```{r}
+unique(house_new$condition)
+condition.aov = aov(house_new$price~as.factor(house_new$condition),data = house_new)
+summary(condition.aov)
+```
+
+```{r}
+house_new %>% ggplot(aes(condition,price,group = condition))+geom_boxplot()+xlim(-0.05,5.5)
+```
+
+```{r}
+aa = TukeyHSD(condition.aov,conf.level = .9)
+aa = aa$`as.factor(house_new$condition)`
+aa[,4][aa[,4]<=0.05]
+```
+#grade
+```{r}
+unique(house_new$grade)
+grade.aov = aov(house_new$price~as.factor(house_new$grade),data = house_new)
+summary(grade.aov)
+```
+```{r}
+house_new %>% ggplot(aes(grade,price,group = grade))+geom_boxplot()+xlim(-0.05,13)
+```
+
+
+#newness
+
+```{r}
+lm = lm(price~newness,data = house_new)
+summary(lm)
+plot(lm)
+```
+
+#Zipcode
+```{r}
+house_new$zipcode = as.character(house_new$zipcode)
+house_new %>% ggplot(aes(zipcode,price))+geom_boxplot()
+```
+```{r}
+unique(house_new$grade)
+zipcode.aov = aov(house_new$price~as.factor(house_new$grade),data = house_new)
+summary(zipcode.aov)
+```
+
+
+#TODO: Zipcode->City
+
+##Modeling
+
+
+```{r}
+lm6 = lm(price~newness+sqft_above+sqft_basement+total_sqft+bedrooms+bathrooms+as.factor(waterfront)+as.factor(grade)+as.factor(zipcode),data = house_new)
+summary(lm6)
+anova(lm6)
+```
+
+
+#remove total_sqft(ok)
+```{r}
+lm7 = lm(price~newness+sqft_above+sqft_basement+as.factor(bedrooms)+as.factor(bathrooms)+as.factor(waterfront)+as.factor(grade)+as.factor(zipcode),data = house_new)
+summary(lm7)
+```
+
+#remove newness (ok)
+```{r}
+lm8 = lm(price~sqft_above+sqft_basement+as.factor(bedrooms)+as.factor(bathrooms)+as.factor(waterfront)+as.factor(grade)+as.factor(zipcode),data = house_new)
+summary(lm8)
+```
+
+#remove bathroom (Nope)
+```{r}
+lm9 = lm(price~sqft_above+sqft_basement+as.factor(bedrooms)+as.factor(waterfront)+as.factor(grade)+as.factor(zipcode),data = house_new)
+summary(lm9)
+```
+
+#remove bedroom (ok)
+```{r}
+lm10 = lm(price~sqft_above+sqft_basement+as.factor(bedrooms)+as.factor(waterfront)+as.factor(grade)+as.factor(zipcode),data = house_new)
+summary(lm10)
+```
+
+#remove waterfront (Nope)
+```{r}
+lm11 = lm(price~sqft_above+sqft_basement+as.factor(bathrooms)+as.factor(grade)+as.factor(zipcode),data = house_new)
+summary(lm11)
+```
+
+
+
